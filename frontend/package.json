@@ -1,0 +1,24 @@
+{
+  "name": "posmaker-frontend",
+  "version": "1.0.0",
+  "description": "POSMaker Frontend Application",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "pos",
+    "frontend"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
