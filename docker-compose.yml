@@ -1,0 +1,132 @@
+# ===========================================
+# POSMaker Docker Compose Configuration
+# ===========================================
+
+services:
+  # ────────────────────────────────────────
+  # PostgreSQL Database
+  # ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: posmaker-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-posmaker}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-posmaker_secret}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - posmaker_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-posmaker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────
+  # Redis Cache & Queue
+  # ────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: posmaker-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - posmaker_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────
+  # PHP-FPM Backend (Symfony)
+  # ────────────────────────────────────────
+  php-fpm:
+    build:
+      context: ./docker/php-fpm
+      dockerfile: Dockerfile
+    container_name: posmaker-php-fpm
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html:delegated
+      - ./docker/php-fpm/php.ini:/usr/local/etc/php/php.ini:ro
+    networks:
+      - posmaker_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "pgsql://${DB_USER:-postgres}:${DB_PASSWORD:-posmaker_secret}@postgres:5432/${DB_NAME:-posmaker}"
+      REDIS_URL: "redis://redis:6379"
+      APP_ENV: ${NODE_ENV:-dev}
+
+  # ────────────────────────────────────────
+  # Nginx Web Server
+  # ────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: posmaker-nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-80}:80"
+    volumes:
+      - ./frontend:/var/www/frontend:delegated
+      - ./backend:/var/www/backend:delegated
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - posmaker_network
+    depends_on:
+      - php-fpm
+      - frontend
+
+  # ────────────────────────────────────────
+  # Frontend (Node.js with Hot Reload)
+  # ────────────────────────────────────────
+  frontend:
+    build:
+      context: ./docker/frontend
+      dockerfile: Dockerfile
+    container_name: posmaker-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - VITE_API_URL=http://localhost:${APP_PORT:-80}/api
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    networks:
+      - posmaker_network
+    depends_on:
+      - nginx
+
+# ────────────────────────────────────────
+# Volumes
+# ────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ────────────────────────────────────────
+# Networks
+# ────────────────────────────────────────
+networks:
+  posmaker_network:
+    driver: bridge
