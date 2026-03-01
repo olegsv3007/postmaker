@@ -1,0 +1,23 @@
+{
+  "name": "posmaker-backend",
+  "version": "1.0.0",
+  "description": "POSMaker Backend API",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "build": "echo 'Build script placeholder'",
+    "test": "jest",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "pos",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
